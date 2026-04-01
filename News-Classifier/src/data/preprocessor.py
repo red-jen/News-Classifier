@@ -1,174 +1,202 @@
 """
 JIRA-002: Text Preprocessor Module
 ===================================
-Module de prétraitement des textes pour la classification d'articles.
-Inclut: normalisation, suppression doublons, stopwords, ponctuation.
+Minimal preprocessing for Sentence Transformer embeddings.
+
+IMPORTANT: Sentence Transformers work best with NATURAL TEXT!
+- Do NOT remove stopwords (they carry semantic meaning)
+- Do NOT remove punctuation (the model handles it)
+- Do NOT stem/lemmatize (destroys word meaning)
+
+We only do:
+1. Remove duplicates (data quality)
+2. Clean whitespace (formatting)
+3. Handle missing values (data integrity)
 """
 
 import re
 import pandas as pd
-from typing import List, Set
-import nltk
-
-# Télécharger les ressources NLTK si nécessaire
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords', quiet=True)
-
-from nltk.corpus import stopwords
+from typing import Optional
 
 
 class TextPreprocessor:
     """
-    Classe pour le prétraitement des textes d'articles d'actualité.
+    Minimal text preprocessing for Sentence Transformer embeddings.
     
-    Étapes de prétraitement:
-    1. Normalisation (minuscules)
-    2. Suppression de la ponctuation (regex)
-    3. Suppression des chiffres
-    4. Suppression des stopwords
-    5. Nettoyage des espaces
+    Why minimal preprocessing?
+    --------------------------
+    Sentence Transformers (like paraphrase-multilingual-MiniLM-L12-v2):
+    - Have their own tokenizer that handles punctuation
+    - Were trained on natural text with stopwords
+    - Understand context - "not good" ≠ "good"
+    - Removing words can HURT embedding quality
+    
+    What we do:
+    1. Clean whitespace (normalize spaces, trim)
+    2. Handle empty/null values
+    3. Remove exact duplicates
+    
+    What we DON'T do (and why):
+    - Remove stopwords: "This is NOT good" → "good" (meaning reversed!)
+    - Remove punctuation: Model handles it internally
+    - Lowercase: Model is case-aware when needed
+    - Stemming: "running" → "run" loses tense information
     """
     
-    def __init__(self, language: str = 'english'):
+    def __init__(self):
+        """Initialize the preprocessor."""
+        pass
+        
+    def clean_text(self, text: str) -> str:
         """
-        Initialise le préprocesseur.
+        Minimal cleaning for embedding models.
+        
+        Only cleans whitespace and handles edge cases.
+        Preserves all semantic content.
         
         Args:
-            language: Langue pour les stopwords (default: 'english')
-        """
-        self.language = language
-        self.stop_words: Set[str] = set(stopwords.words(language))
-        
-    def normalize_text(self, text: str) -> str:
-        """
-        Normalise le texte en minuscules.
-        
-        Args:
-            text: Texte à normaliser
+            text: Raw text to clean
             
         Returns:
-            Texte en minuscules
+            Cleaned text (preserving meaning)
         """
-        if not isinstance(text, str):
+        # Handle non-string or empty values
+        if not isinstance(text, str) or not text:
             return ""
-        return text.lower()
-    
-    def remove_punctuation(self, text: str) -> str:
-        """
-        Supprime la ponctuation avec des expressions régulières.
         
-        Args:
-            text: Texte à nettoyer
-            
-        Returns:
-            Texte sans ponctuation
-        """
-        # Supprime tous les caractères non-alphanumériques sauf espaces
-        text = re.sub(r'[^\w\s]', '', text)
+        # Only clean excessive whitespace
+        text = re.sub(r'\s+', ' ', text).strip()
+        
         return text
-    
-    def remove_numbers(self, text: str) -> str:
-        """
-        Supprime les chiffres du texte.
-        
-        Args:
-            text: Texte à nettoyer
-            
-        Returns:
-            Texte sans chiffres
-        """
-        return re.sub(r'\d+', '', text)
-    
-    def remove_stopwords(self, text: str) -> str:
-        """
-        Supprime les stopwords du texte.
-        
-        Args:
-            text: Texte à nettoyer
-            
-        Returns:
-            Texte sans stopwords
-        """
-        words = text.split()
-        filtered_words = [word for word in words if word not in self.stop_words]
-        return ' '.join(filtered_words)
-    
-    def clean_whitespace(self, text: str) -> str:
-        """
-        Nettoie les espaces multiples.
-        
-        Args:
-            text: Texte à nettoyer
-            
-        Returns:
-            Texte avec espaces normalisés
-        """
-        return re.sub(r'\s+', ' ', text).strip()
     
     def preprocess(self, text: str) -> str:
         """
-        Applique toutes les étapes de prétraitement.
+        Main preprocessing function.
+        
+        For Sentence Transformers, this is intentionally minimal.
         
         Args:
-            text: Texte brut à prétraiter
+            text: Raw text
             
         Returns:
-            Texte prétraité
+            Cleaned text ready for embedding
         """
-        text = self.normalize_text(text)
-        text = self.remove_punctuation(text)
-        text = self.remove_numbers(text)
-        text = self.remove_stopwords(text)
-        text = self.clean_whitespace(text)
-        return text
+        return self.clean_text(text)
     
     def preprocess_dataframe(self, df: pd.DataFrame, 
                              text_column: str = 'text',
                              output_column: str = 'text_clean') -> pd.DataFrame:
         """
-        Prétraite une colonne de texte dans un DataFrame.
+        Preprocess a text column in a DataFrame.
         
         Args:
-            df: DataFrame contenant les textes
-            text_column: Nom de la colonne source
-            output_column: Nom de la colonne de sortie
+            df: DataFrame containing texts
+            text_column: Source column name
+            output_column: Output column name
             
         Returns:
-            DataFrame avec la colonne prétraitée
+            DataFrame with cleaned text column
         """
         df = df.copy()
-        print(f"⏳ Prétraitement de {len(df)} textes...")
-        df[output_column] = df[text_column].apply(self.preprocess)
-        print("✅ Prétraitement terminé!")
+        print(f"⏳ Preprocessing {len(df)} texts (minimal cleaning for embeddings)...")
+        
+        # Clean text
+        df[output_column] = df[text_column].apply(self.clean_text)
+        
+        # Remove empty texts
+        empty_count = (df[output_column] == "").sum()
+        if empty_count > 0:
+            df = df[df[output_column] != ""]
+            print(f"   Removed {empty_count} empty texts")
+        
+        print("✅ Preprocessing complete!")
         return df
 
 
 def remove_duplicates(df: pd.DataFrame, 
                      text_column: str = 'text') -> pd.DataFrame:
     """
-    Supprime les articles en double basé sur le texte.
+    Remove duplicate articles based on text content.
+    
+    This is the ONLY heavy preprocessing we do - removing exact duplicates
+    is purely a data quality measure, not text transformation.
     
     Args:
-        df: DataFrame avec les articles
-        text_column: Colonne à utiliser pour détecter les doublons
+        df: DataFrame with articles
+        text_column: Column to check for duplicates
         
     Returns:
-        DataFrame sans doublons
+        DataFrame without duplicates
     """
     initial_count = len(df)
     df_clean = df.drop_duplicates(subset=[text_column], keep='first')
     removed_count = initial_count - len(df_clean)
     
-    print(f"🗑️ {removed_count} doublons supprimés ({initial_count} → {len(df_clean)})")
+    print(f"🗑️ {removed_count} duplicates removed ({initial_count} → {len(df_clean)})")
     return df_clean
 
 
+# ============================================================================
+# LEGACY FUNCTIONS (kept for reference but NOT recommended for embeddings)
+# ============================================================================
+
+class LegacyPreprocessor:
+    """
+    Traditional NLP preprocessing (for TF-IDF, Bag of Words, etc.)
+    
+    ⚠️ WARNING: Do NOT use these for Sentence Transformer embeddings!
+    These are only useful for traditional ML approaches like:
+    - TF-IDF vectorization
+    - Bag of Words
+    - Count Vectorizer
+    """
+    
+    def __init__(self, language: str = 'english'):
+        import nltk
+        try:
+            nltk.data.find('corpora/stopwords')
+        except LookupError:
+            nltk.download('stopwords', quiet=True)
+        from nltk.corpus import stopwords
+        self.stop_words = set(stopwords.words(language))
+    
+    def remove_punctuation(self, text: str) -> str:
+        """Remove punctuation using regex."""
+        return re.sub(r'[^\w\s]', '', text)
+    
+    def remove_stopwords(self, text: str) -> str:
+        """Remove stopwords."""
+        words = text.split()
+        return ' '.join([w for w in words if w.lower() not in self.stop_words])
+    
+    def remove_numbers(self, text: str) -> str:
+        """Remove numbers."""
+        return re.sub(r'\d+', '', text)
+    
+    def lowercase(self, text: str) -> str:
+        """Convert to lowercase."""
+        return text.lower()
+
+
 if __name__ == "__main__":
-    # Test du module
+    # Test the module
     preprocessor = TextPreprocessor()
     
-    sample_text = "Breaking News! The stock market rose 15% today, amazing results!!!"
-    print(f"Original: {sample_text}")
-    print(f"Prétraité: {preprocessor.preprocess(sample_text)}")
+    # Test cases showing why minimal preprocessing is better
+    test_cases = [
+        "Breaking News! The stock market rose 15% today.",
+        "This movie is NOT good at all!",
+        "The   quick   brown   fox   jumps.",  # Extra whitespace
+        "",  # Empty string
+        None,  # None value
+    ]
+    
+    print("=" * 60)
+    print("MINIMAL PREPROCESSING FOR EMBEDDINGS")
+    print("=" * 60)
+    
+    for text in test_cases:
+        cleaned = preprocessor.preprocess(text) if text else preprocessor.preprocess("")
+        print(f"Original: {repr(text)}")
+        print(f"Cleaned:  {repr(cleaned)}")
+        print("-" * 40)

@@ -34,7 +34,8 @@ LABEL_NAMES = {
     3: ('Sci/Tech', '🔬')
 }
 
-MODEL_PATH = "./models/best_model.joblib"
+# Chemin absolu basé sur l'emplacement de app.py
+MODEL_PATH = Path(__file__).parent / "models" / "best_classifier.joblib"
 
 
 @st.cache_resource
@@ -44,7 +45,7 @@ def load_models():
     embedding_generator.load_model()
     
     try:
-        classifier = NewsClassifier.load_model(MODEL_PATH)
+        classifier = NewsClassifier.load_model(str(MODEL_PATH))
     except FileNotFoundError:
         st.warning("⚠️ Modèle non trouvé. Utilisation d'un modèle de démonstration.")
         classifier = None
@@ -65,7 +66,12 @@ def predict_category(text: str, embedding_generator, classifier, preprocessor):
     # Prédiction
     if classifier is not None:
         prediction = classifier.predict(embedding)[0]
-        probabilities = classifier.predict_proba(embedding)[0]
+        try:
+            probabilities = classifier.predict_proba(embedding)[0]
+        except (AttributeError, Exception):
+            # SVC sans probability=True - créer probabilités simulées
+            probabilities = np.zeros(4)
+            probabilities[prediction] = 1.0
     else:
         # Mode démo sans modèle
         prediction = np.random.randint(0, 4)

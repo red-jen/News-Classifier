@@ -1,9 +1,4 @@
-"""
-JIRA-004: Embeddings Generator Module
-======================================
-Génération des embeddings avec Sentence Transformers.
-Modèle: paraphrase-multilingual-MiniLM-L12-v2
-"""
+
 
 import numpy as np
 import pandas as pd
@@ -12,15 +7,21 @@ from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
 
+
+
+def loaddata(str):
+
+   
+
+
+
+
+
+
+
+
 class EmbeddingGenerator:
-    """
-    Générateur d'embeddings utilisant Sentence Transformers.
-    
-    Le modèle paraphrase-multilingual-MiniLM-L12-v2 est optimisé pour:
-    - Support multilingue (50+ langues)
-    - Représentations sémantiques de haute qualité
-    - Taille réduite (384 dimensions)
-    """
+   
     
     def __init__(self, model_name: str = 'paraphrase-multilingual-MiniLM-L12-v2'):
         """

@@ -1,0 +1,132 @@
+# News Classifier - Docker Compose
+# Services: app, jupyter, airflow
+
+version: '3.8'
+
+services:
+  # ===========================================
+  # Main Streamlit Application
+  # ===========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-classifier-app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    environment:
+      - PYTHONPATH=/app
+    command: streamlit run app.py --server.address 0.0.0.0 --server.port 8501
+    restart: unless-stopped
+
+  # ===========================================
+  # Jupyter Notebook for Development
+  # ===========================================
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-classifier-jupyter
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./:/app
+    environment:
+      - PYTHONPATH=/app
+    command: jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token=''
+    restart: unless-stopped
+
+  # ===========================================
+  # PostgreSQL Database (for Airflow)
+  # ===========================================
+  postgres:
+    image: postgres:13
+    container_name: news-classifier-postgres
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ===========================================
+  # Apache Airflow Webserver
+  # ===========================================
+  airflow-webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: news-classifier-airflow-webserver
+    depends_on:
+      - postgres
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=your-fernet-key-here
+      - AIRFLOW__WEBSERVER__SECRET_KEY=your-secret-key-here
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - PYTHONPATH=/app
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./models:/app/models
+    ports:
+      - "8080:8080"
+    command: airflow webserver
+    restart: unless-stopped
+
+  # ===========================================
+  # Apache Airflow Scheduler
+  # ===========================================
+  airflow-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    container_name: news-classifier-airflow-scheduler
+    depends_on:
+      - postgres
+      - airflow-webserver
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=your-fernet-key-here
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - PYTHONPATH=/app
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./models:/app/models
+    command: airflow scheduler
+    restart: unless-stopped
+
+  # ===========================================
+  # ChromaDB Vector Database
+  # ===========================================
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: news-classifier-chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - ANONYMIZED_TELEMETRY=False
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  chroma_data:
+
+networks:
+  default:
+    name: news-classifier-network

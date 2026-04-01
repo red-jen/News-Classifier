@@ -1,0 +1,45 @@
+# News Classifier - Development Docker Compose
+# Simplified setup for local development (without Airflow)
+
+version: '3.8'
+
+services:
+  # ===========================================
+  # Main Application (Streamlit)
+  # ===========================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-classifier-dev
+    ports:
+      - "8501:8501"
+    volumes:
+      # Mount source code for live reload
+      - ./:/app
+    environment:
+      - PYTHONPATH=/app
+      - STREAMLIT_SERVER_RUN_ON_SAVE=true
+    command: streamlit run app.py --server.address 0.0.0.0 --server.port 8501 --server.runOnSave true
+    restart: unless-stopped
+
+  # ===========================================
+  # Jupyter Notebook
+  # ===========================================
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-classifier-jupyter-dev
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./:/app
+    environment:
+      - PYTHONPATH=/app
+    command: jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='dev'
+    restart: unless-stopped
+
+networks:
+  default:
+    name: news-classifier-dev-network

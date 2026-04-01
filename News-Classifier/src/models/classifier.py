@@ -1,9 +1,3 @@
-"""
-JIRA-006: News Classifier Module
-=================================
-Entraînement et évaluation des modèles ML pour la classification.
-Inclut: Logistic Regression, Random Forest, SVM, et évaluation overfitting.
-"""
 
 import numpy as np
 import pandas as pd
@@ -132,7 +126,19 @@ class NewsClassifier:
         """
         if not self.is_trained:
             raise RuntimeError("Le modèle n'est pas entraîné!")
-        return self.model.predict_proba(X)
+        
+        # SVC sans probability=True n'a pas predict_proba
+        if hasattr(self.model, 'predict_proba'):
+            return self.model.predict_proba(X)
+        else:
+            # Fallback: utiliser les prédictions pour créer des probabilités simulées
+            predictions = self.model.predict(X)
+            n_classes = len(np.unique(predictions)) if len(predictions) > 0 else 4
+            n_classes = max(n_classes, 4)  # Au moins 4 classes
+            proba = np.zeros((len(X), n_classes))
+            for i, pred in enumerate(predictions):
+                proba[i, pred] = 1.0  # 100% pour la classe prédite
+            return proba
     
     def evaluate(self, X_test: np.ndarray, y_test: np.ndarray) -> Dict[str, Any]:
         """
@@ -240,11 +246,31 @@ class NewsClassifier:
         """Charge un modèle sauvegardé."""
         data = joblib.load(filepath)
         
-        classifier = cls(model_type=data['model_type'])
-        classifier.model = data['model']
-        classifier.training_history = data['training_history']
-        classifier.is_trained = True
+        # Gérer les deux formats: dict (NewsClassifier) ou modèle sklearn brut
+        if isinstance(data, dict) and 'model' in data:
+            # Format NewsClassifier
+            classifier = cls(model_type=data['model_type'])
+            classifier.model = data['model']
+            classifier.training_history = data.get('training_history', {})
+        else:
+            # Format sklearn brut (sauvegardé depuis le notebook)
+            model_type = type(data).__name__.lower()
+            if 'logistic' in model_type:
+                model_type = 'logistic_regression'
+            elif 'svc' in model_type or 'svm' in model_type:
+                model_type = 'svm'
+            elif 'randomforest' in model_type:
+                model_type = 'random_forest'
+            elif 'kneighbors' in model_type:
+                model_type = 'knn'
+            else:
+                model_type = 'logistic_regression'
+            
+            classifier = cls(model_type=model_type)
+            classifier.model = data
+            classifier.training_history = {}
         
+        classifier.is_trained = True
         print(f"✅ Modèle chargé: {filepath}")
         return classifier
 

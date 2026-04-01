@@ -1,0 +1,47 @@
+# Airflow-specific Dockerfile
+# Based on official Airflow image with our dependencies
+
+FROM apache/airflow:2.7.0-python3.10
+
+# Switch to root to install system packages
+USER root
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Switch back to airflow user
+USER airflow
+
+# Install PyTorch CPU-only first (avoids 600MB+ CUDA downloads)
+RUN pip install --no-cache-dir --timeout=300 \
+    torch --index-url https://download.pytorch.org/whl/cpu
+
+# Install other dependencies
+RUN pip install --no-cache-dir --timeout=300 \
+    pandas \
+    numpy \
+    scikit-learn \
+    nltk \
+    sentence-transformers \
+    chromadb \
+    datasets \
+    matplotlib \
+    seaborn \
+    tqdm \
+    pyyaml
+
+# Download NLTK data
+RUN python -c "import nltk; nltk.download('stopwords'); nltk.download('punkt')"
+
+# Set working directory
+WORKDIR /app
+
+# Copy source code
+COPY --chown=airflow:root src/ /app/src/
+COPY --chown=airflow:root airflow/dags/ /opt/airflow/dags/
+
+# Set Python path
+ENV PYTHONPATH=/app
